@@ -1,0 +1,22 @@
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.log
+
+# 虚拟环境
+venv/
+.venv/
+env/
+.env/
+
+# 配置密钥（防止把密码上传上去）
+config.ini
+secret.py
+*.env
+
+# 系统垃圾文件
+.DS_Store
+Thumbs.db
