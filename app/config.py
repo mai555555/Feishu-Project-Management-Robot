@@ -19,7 +19,11 @@ class Settings:
         "https://api.tourmaster.ch/v1beta/models/gemini-3.1-flash-lite:generateContent",
     )
     ai_api_key: str = os.getenv("AI_API_KEY", "")
+    tavily_api_key: str = os.getenv("TAVILY_API_KEY", "")
+    tavily_api_url: str = os.getenv("TAVILY_API_URL", "https://api.tavily.com/search")
     data_dir: str = os.getenv("BOT_DATA_DIR", "data")
+    feishu_root_department_id: str = os.getenv("FEISHU_ROOT_DEPARTMENT_ID", "0")
+    bootstrap_admin_open_ids: str = os.getenv("BOT_BOOTSTRAP_ADMIN_OPEN_IDS", "")
 
 
 settings = Settings()

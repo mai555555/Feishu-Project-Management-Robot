@@ -50,11 +50,14 @@ def remember_recent_file(
     file_info: dict[str, str],
 ) -> None:
     data = _load()
-    data[_key(chat_id, sender_open_id)] = {
+    item = {
         "created_at": time.time(),
         "message_id": message_id,
         "file_info": file_info,
     }
+    data[_key(chat_id, sender_open_id)] = item
+    if chat_id:
+        data[_key(chat_id, None)] = item
     _save(data)
 
 
@@ -63,7 +66,7 @@ def get_recent_file(
     sender_open_id: str | None,
 ) -> tuple[str | None, dict[str, str] | None]:
     data = _load()
-    item = data.get(_key(chat_id, sender_open_id))
+    item = data.get(_key(chat_id, sender_open_id)) or data.get(_key(chat_id, None))
     _save(data)
     if not item:
         return None, None

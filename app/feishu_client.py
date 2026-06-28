@@ -155,7 +155,8 @@ class FeishuClient:
                         {"field_name": "任务名称", "type": 1},
                         {"field_name": "任务说明", "type": 1},
                         {"field_name": "模块", "type": 1},
-                        {"field_name": "负责人", "type": 1},
+                        {"field_name": "职责标签", "type": 1},
+                        {"field_name": "实际负责人", "type": 1},
                         {"field_name": "优先级", "type": 1},
                         {"field_name": "状态", "type": 1},
                         {"field_name": "开始时间", "type": 1},
@@ -163,6 +164,25 @@ class FeishuClient:
                         {"field_name": "风险", "type": 1},
                         {"field_name": "依赖项", "type": 1},
                         {"field_name": "备注", "type": 1},
+                    ],
+                }
+            },
+        )
+
+    async def create_work_log_table(self, app_token: str) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/bitable/v1/apps/{app_token}/tables",
+            json={
+                "table": {
+                    "name": "工作日志",
+                    "default_view_name": "日志记录",
+                    "fields": [
+                        {"field_name": "日期", "type": 1},
+                        {"field_name": "工作事项", "type": 1},
+                        {"field_name": "完成进度", "type": 1},
+                        {"field_name": "备注/困难点", "type": 1},
+                        {"field_name": "负责人", "type": 1},
                     ],
                 }
             },
@@ -177,6 +197,45 @@ class FeishuClient:
         return await self._request(
             "POST",
             f"/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_create",
+            json={"records": records},
+        )
+
+    async def list_records(
+        self,
+        app_token: str,
+        table_id: str,
+        *,
+        page_size: int = 100,
+    ) -> list[dict[str, Any]]:
+        records: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, Any] = {"page_size": page_size}
+            if page_token:
+                params["page_token"] = page_token
+            data = await self._request(
+                "GET",
+                f"/bitable/v1/apps/{app_token}/tables/{table_id}/records",
+                params=params,
+            )
+            payload = data.get("data", {})
+            records.extend(payload.get("items") or [])
+            if not payload.get("has_more"):
+                break
+            page_token = payload.get("page_token")
+            if not page_token:
+                break
+        return records
+
+    async def batch_update_records(
+        self,
+        app_token: str,
+        table_id: str,
+        records: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        return await self._request(
+            "POST",
+            f"/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_update",
             json={"records": records},
         )
 
@@ -210,6 +269,67 @@ class FeishuClient:
             params={"user_id_type": "open_id"},
             json=payload,
         )
+
+
+    async def list_child_departments(
+        self,
+        department_id: str = "0",
+        *,
+        page_size: int = 50,
+    ) -> list[dict[str, Any]]:
+        departments: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, Any] = {
+                "department_id_type": "open_department_id",
+                "page_size": page_size,
+            }
+            if page_token:
+                params["page_token"] = page_token
+            data = await self._request(
+                "GET",
+                f"/contact/v3/departments/{department_id}/children",
+                params=params,
+            )
+            payload = data.get("data", {})
+            departments.extend(payload.get("items") or [])
+            if not payload.get("has_more"):
+                break
+            page_token = payload.get("page_token")
+            if not page_token:
+                break
+        return departments
+
+    async def list_department_users(
+        self,
+        department_id: str = "0",
+        *,
+        page_size: int = 50,
+    ) -> list[dict[str, Any]]:
+        users: list[dict[str, Any]] = []
+        page_token: str | None = None
+        while True:
+            params: dict[str, Any] = {
+                "department_id": department_id,
+                "department_id_type": "open_department_id",
+                "user_id_type": "open_id",
+                "page_size": page_size,
+            }
+            if page_token:
+                params["page_token"] = page_token
+            data = await self._request(
+                "GET",
+                "/contact/v3/users/find_by_department",
+                params=params,
+            )
+            payload = data.get("data", {})
+            users.extend(payload.get("items") or [])
+            if not payload.get("has_more"):
+                break
+            page_token = payload.get("page_token")
+            if not page_token:
+                break
+        return users
 
 
 feishu_client = FeishuClient()

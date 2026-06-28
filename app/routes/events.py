@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 from typing import Any
 
@@ -9,10 +10,16 @@ from app.config import settings
 from app.feishu_client import feishu_client
 from app.services.commands import handle_command
 from app.services.dedupe import mark_processed
+from app.services.recent_file_store import remember_recent_file
 
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+BOT_MENTION_NAMES = tuple(
+    name.strip()
+    for name in os.getenv("FEISHU_BOT_NAMES", "麦草莓").split(",")
+    if name.strip()
+)
 
 
 def _message_content(event: dict[str, Any]) -> dict[str, Any]:
@@ -108,9 +115,19 @@ def _message_file(event: dict[str, Any]) -> dict[str, str] | None:
     return None
 
 
-def _has_mention(event: dict[str, Any]) -> bool:
+def _is_bot_mention(mention: dict[str, Any]) -> bool:
+    if not BOT_MENTION_NAMES:
+        return False
+    names = [
+        str(mention.get(key) or "").strip().lstrip("@")
+        for key in ("name", "key")
+    ]
+    return any(name in BOT_MENTION_NAMES for name in names)
+
+
+def _has_bot_mention(event: dict[str, Any]) -> bool:
     mentions = event.get("message", {}).get("mentions") or []
-    return bool(mentions)
+    return any(_is_bot_mention(mention) for mention in mentions)
 
 
 def _strip_leading_mentions(text: str, event: dict[str, Any]) -> str:
@@ -132,13 +149,7 @@ def _should_ignore_message(event: dict[str, Any], text: str, file_info: dict[str
     if chat_type == "p2p":
         return False
 
-    if file_info:
-        return False
-
-    if stripped.startswith("/"):
-        return False
-
-    return not _has_mention(event)
+    return not _has_bot_mention(event)
 
 
 def _event_key(payload: dict[str, Any], event: dict[str, Any]) -> str:
@@ -192,11 +203,14 @@ async def feishu_events(request: Request) -> dict[str, Any]:
         return {"ok": True, "ignored": "duplicate"}
 
     if _should_ignore_message(event, raw_text, file_info):
+        if file_info:
+            remember_recent_file(chat_id, sender_open_id, message.get("message_id"), file_info)
+            return {"ok": True, "remembered_file": True, "ignored": "group_file_without_mention"}
         return {"ok": True, "ignored": "group_message_without_mention_or_command"}
 
     text = _strip_leading_mentions(raw_text, event)
     if not text:
-        text = "/帮助"
+        text = "帮助"
 
     try:
         result = await handle_command(
@@ -207,7 +221,8 @@ async def feishu_events(request: Request) -> dict[str, Any]:
             message_id=message.get("message_id"),
             file_info=file_info,
         )
-        await feishu_client.send_text(chat_id, result.text)
+        if result.text.strip():
+            await feishu_client.send_text(chat_id, result.text)
     except Exception as exc:
         logger.exception("Failed to handle Feishu event")
         try:
